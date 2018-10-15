@@ -13,3 +13,6 @@ If your algorithm can't solve that problem,
 it likely can't solve the harder krazy world.
 
 <img width="600" alt="./example_envs/kontrived_grid.png" src="./example_envs/kontrived_grid.png">
+
+
+**Bradly Stadie. Ge Yang. Written with :heart:**
