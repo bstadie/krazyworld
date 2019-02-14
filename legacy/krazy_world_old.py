@@ -9,9 +9,6 @@ import copy
 clock = pygame.time.Clock()
 
 
-# To Do:
-# 4) add enemies
-# 5) add multiple screens
 
 
 EASY_GRID_KWARGS = dict(screen_height=256,
