@@ -124,6 +124,12 @@ class GameGrid:
             self.reset_goal_squares()
             self.game_grid_init = copy.deepcopy(self.grid_np)
 
+        def get_one_normal_square(self):
+            g = self.task_rng.randint(0, self.grid_squares_per_row - 1, (2,))
+            if self.grid_np[g[0], g[1]] == self.tile_types.normal:
+                return g
+            return self.get_one_normal_square()
+
         def get_one_non_agent_square(self):
             g = self.task_rng.randint(0, self.grid_squares_per_row - 1, (2,))
             if g[0] != self.agent.agent_position[0] or g[1] != self.agent.agent_position[1]:
@@ -284,14 +290,14 @@ class KrazyGridWorld:
 
     def reset_task(self):
         # reset the entire board and agent start position, generating a new MDP.
-        self.agent.agent_position = (None, None)
+        self.agent.agent_position = (-1, -1)
         self.game_grid.get_new_game_grid()
         self.reset_agent_start_position()
 
     def reset_agent_start_position(self):
         # keep the previous board but update the agents starting position.
         # keeps the previous MDP but samples x_0.
-        new_start = self.game_grid.get_one_non_agent_square()
+        new_start = self.game_grid.get_one_normal_square()
         self.agent.agent_position = new_start
         self.agent.agent_position_init = new_start
 
