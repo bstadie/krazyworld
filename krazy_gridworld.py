@@ -366,31 +366,31 @@ class KrazyGridWorld:
         self.simple_image_viewer.imshow(im_obs)
         time.sleep(0.075)
 
-    def get_state_obs(self):
+    def get_state_obs(self, flatten=True):
         grid_np = copy.deepcopy(self.game_grid.grid_np)
         agent_p = self.agent.agent_position
         grid_np[agent_p[0], agent_p[1]] = self.tile_types.agent
         grid_np = grid_np.astype(np.uint8)
         #agent_p = np.array(self.agent.agent_position)
         if self.one_hot_obs:
-            n_values = np.max(grid_np) + 1
+            n_values = len(self.tile_types.all_tt)
             grid_np = np.eye(n_values)[grid_np]
             #agent_p_temp = np.zeros((self.game_grid.grid_squares_per_row, self.game_grid.grid_squares_per_row, 1))
             #agent_p_temp[agent_p[0], agent_p[1], :] = 1
 
         if self.use_local_obs:
-            neighbors = []
             x, y = self.agent.agent_position
+            valid_idxs = np.zeros_like(grid_np)
+            valid_idxs[x, y] = 1.0
             for _i, _j in [(-1, -1), (0, -1), (1, -1), (1, 0), (1, 1), (0, 1), (-1, 1), (-1, 0)]:
                 i, j = (_i + x, _j + y)
                 if 0 <= i < self.game_grid.grid_squares_per_row and 0 <= j < self.game_grid.grid_squares_per_row:
-                    neighbors.append([j, i])
-                else:
-                    neighbors.append(None)
+                    valid_idxs[i, j] = 1.0
+            grid_np *= valid_idxs
 
-            grid_np = np.array(neighbors)
-
-        return grid_np.flatten()
+        if flatten:
+          grid_np = grid_np.flatten()
+        return grid_np
 
     def get_img_obs(self):
         grid_np = copy.deepcopy(self.game_grid.grid_np)
