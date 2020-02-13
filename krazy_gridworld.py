@@ -278,12 +278,13 @@ class KrazyGridWorld:
             self.agent.change_dynamics()
         if reset_board:
             self.reset_task()
-        if reset_agent_start_pos:
+        elif reset_agent_start_pos:
             self.reset_agent_start_position()
         return self.get_obs()
 
     def reset_task(self):
         # reset the entire board and agent start position, generating a new MDP.
+        self.agent.agent_position = (None, None)
         self.game_grid.get_new_game_grid()
         self.reset_agent_start_position()
 
