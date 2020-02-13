@@ -363,7 +363,7 @@ class KrazyGridWorld:
         if self.simple_image_viewer is None:
             from gym.envs.classic_control.rendering import SimpleImageViewer
             self.simple_image_viewer = SimpleImageViewer()
-        im_obs = self.get_img_obs()
+        im_obs = self.get_img_obs(render_global_obs=True)
         self.simple_image_viewer.imshow(im_obs)
         time.sleep(0.075)
 
@@ -393,7 +393,9 @@ class KrazyGridWorld:
           grid_np = grid_np.flatten()
         return grid_np
 
-    def get_img_obs(self):
+    def get_img_obs(self, render_global_obs=None):
+        if render_global_obs is None:
+            render_global_obs = not self.use_local_obs
         grid_np = copy.deepcopy(self.game_grid.grid_np)
         grid_np[self.agent.agent_position[0], self.agent.agent_position[1]] = self.tile_types.agent
         fake_img = np.zeros((self.game_grid.grid_squares_per_row, self.game_grid.grid_squares_per_row, 3))
@@ -408,6 +410,8 @@ class KrazyGridWorld:
             neighbors = []
             x, y = self.agent.agent_position
             valid_idxs = np.zeros_like(fake_img)
+            if render_global_obs:
+              valid_idxs[:, :] = 0.5
             valid_idxs[x, y] = 1.0
             for _i, _j in [(-1, -1), (0, -1), (1, -1), (1, 0), (1, 1), (0, 1), (-1, 1), (-1, 0)]:
                 i, j = (_i + x, _j + y)
@@ -444,7 +448,7 @@ class KrazyGridWorld:
 
 def run_grid():
     kw = KrazyGridWorld(screen_height=256, grid_squares_per_row=10,
-                        one_hot_obs=False, use_local_obs=False, image_obs=True,
+                        one_hot_obs=False, use_local_obs=True, image_obs=True,
                         seed=42, task_seed=68,
                         num_goals=3, max_goal_distance=np.inf, min_goal_distance=2,
                         death_square_percentage=0.08,
