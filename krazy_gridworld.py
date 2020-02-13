@@ -418,7 +418,7 @@ class KrazyGridWorld:
             fake_img *= valid_idxs
 
         res = cv2.resize(fake_img,
-                         dsize=(256, 256),
+                         dsize=self.screen_dim,
                          interpolation=cv2.INTER_NEAREST)
         res = res.astype(np.uint8)
         return res
@@ -437,7 +437,8 @@ class KrazyGridWorld:
             return rew
 
     def close(self):
-        self.simple_image_viewer.close()
+        if self.simple_image_viewer is not None:
+            self.simple_image_viewer.close()
 
 
 def run_grid():
