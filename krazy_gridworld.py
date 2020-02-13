@@ -36,8 +36,10 @@ class TileTypes:
             self.energy = 9
             self.all_tt = [self.hole, self.normal, self.goal, self.agent, self.transporter, self.door,
                            self.key, self.death, self.ice, self.energy]
-            self.colors = [Color.black, Color.white, Color.gold, Color.blue, Color.orange, Color.silver,
-                           Color.magenta, Color.red, Color.purple, Color.green]
+            self.initial_colors = [
+                Color.black, Color.white, Color.gold, Color.blue, Color.orange, Color.silver,
+                Color.magenta, Color.red, Color.purple, Color.green]
+            self.colors = list(self.initial_colors)
             self._rng = rng
 
         def switch_tile_type_values(self):
@@ -47,6 +49,7 @@ class TileTypes:
                 self.all_tt[i] = tt_idx
 
         def reset_colors(self):
+            self.colors = list(self.initial_colors)
             self._rng.shuffle(self.colors)
 
 
@@ -64,6 +67,7 @@ class Agent:
             self._rng = rng
 
         def change_dynamics(self):
+            self.dynamics = [0, 1, 2, 3]
             self._rng.shuffle(self.dynamics)
 
         def give_energy(self):
