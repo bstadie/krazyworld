@@ -294,9 +294,10 @@ class KrazyGridWorld:
         if self.image_obs:
             return self.get_img_obs()
         else:
-            return None
+            return self.get_state_obs()
 
     def step(self, a, render=False):
+        start_reward = self.get_reward()
         if self.agent.dead is False:
             proposed_step = self.agent.try_step(a)
             if self.game_grid.is_position_legal(proposed_step):
@@ -324,7 +325,7 @@ class KrazyGridWorld:
 
             if render:
                 self.render()
-        return self.get_obs(), self.get_reward(), self.agent.dead, dict()
+        return self.get_obs(), self.get_reward() - start_reward, self.agent.dead, dict()
 
     def check_dead(self):
         agent_pos = self.agent.agent_position
