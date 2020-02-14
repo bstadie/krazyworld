@@ -2,7 +2,6 @@ import numpy as np
 import sys
 from collections import OrderedDict
 import os
-import random
 import copy
 from enum import Enum
 import cv2
@@ -24,7 +23,7 @@ class Color(Enum):
 
 
 class TileTypes:
-        def __init__(self):
+        def __init__(self, rng):
             self.hole = 0
             self.normal = 1
             self.goal = 2
@@ -37,21 +36,25 @@ class TileTypes:
             self.energy = 9
             self.all_tt = [self.hole, self.normal, self.goal, self.agent, self.transporter, self.door,
                            self.key, self.death, self.ice, self.energy]
-            self.colors = [Color.black, Color.white, Color.gold, Color.blue, Color.orange, Color.silver,
-                           Color.magenta, Color.red, Color.purple, Color.green]
+            self.initial_colors = [
+                Color.black, Color.white, Color.gold, Color.blue, Color.orange, Color.silver,
+                Color.magenta, Color.red, Color.purple, Color.green]
+            self.colors = list(self.initial_colors)
+            self._rng = rng
 
         def switch_tile_type_values(self):
             shuffled_idxs = list(range(len(self.all_tt)))
-            random.shuffle(shuffled_idxs)
+            self._rng.shuffle(shuffled_idxs)
             for i, tt_idx in enumerate(shuffled_idxs):
                 self.all_tt[i] = tt_idx
 
         def reset_colors(self):
-            random.shuffle(self.colors)
+            self.colors = list(self.initial_colors)
+            self._rng.shuffle(self.colors)
 
 
 class Agent:
-        def __init__(self, energy_replenish, num_steps_until_energy_needed):
+        def __init__(self, energy_replenish, num_steps_until_energy_needed, rng):
             self.agent_position = [0, 0]
             self.agent_position_init = [0, 0]
             self.has_key = False
@@ -61,9 +64,11 @@ class Agent:
             self.energy_replenish = energy_replenish
             self.energy_init = num_steps_until_energy_needed
             self.num_steps_until_energy_needed = num_steps_until_energy_needed
+            self._rng = rng
 
         def change_dynamics(self):
-            random.shuffle(self.dynamics)
+            self.dynamics = [0, 1, 2, 3]
+            self._rng.shuffle(self.dynamics)
 
         def give_energy(self):
             self.num_steps_until_energy_needed += self.energy_replenish
@@ -118,6 +123,12 @@ class GameGrid:
             self.reset_transporter_squares()
             self.reset_goal_squares()
             self.game_grid_init = copy.deepcopy(self.grid_np)
+
+        def get_one_normal_square(self):
+            g = self.task_rng.randint(0, self.grid_squares_per_row - 1, (2,))
+            if self.grid_np[g[0], g[1]] == self.tile_types.normal:
+                return g
+            return self.get_one_normal_square()
 
         def get_one_non_agent_square(self):
             g = self.task_rng.randint(0, self.grid_squares_per_row - 1, (2,))
@@ -219,7 +230,7 @@ class KrazyGridWorld:
     def __init__(self, screen_height,
                  grid_squares_per_row=10,
                  one_hot_obs=True,
-                 seed=42, task_seed=None, init_pos_seed=None,
+                 seed=42, task_seed=None,
                  death_square_percentage=0.1, ice_sq_perc=0.05,
                  num_goals=3, min_goal_distance=2, max_goal_distance=np.inf,
                  num_steps_before_energy_needed=11, energy_replenish=8, energy_sq_perc=0.05,
@@ -230,21 +241,17 @@ class KrazyGridWorld:
         if task_seed is None:
             task_seed = seed
 
-        if init_pos_seed is None:
-            init_pos_seed = seed
-
-        self.init_pos_rng = np.random.RandomState(init_pos_seed)
         self.task_rng = np.random.RandomState(task_seed)
-        random.seed(task_seed)
 
         self.one_hot_obs = one_hot_obs
         self.image_obs = image_obs
         self.use_local_obs = use_local_obs
         self.screen_dim = (screen_height, screen_height)  # width and height
 
-        self.tile_types = TileTypes()
+        self.tile_types = TileTypes(rng=self.task_rng)
         self.agent = Agent(num_steps_until_energy_needed=num_steps_before_energy_needed,
-                           energy_replenish=energy_replenish)
+                           energy_replenish=energy_replenish,
+                           rng=self.task_rng)
         self.game_grid = GameGrid(grid_squares_per_row=grid_squares_per_row,
                                   tile_types=self.tile_types,
                                   agent=self.agent,
@@ -277,19 +284,20 @@ class KrazyGridWorld:
             self.agent.change_dynamics()
         if reset_board:
             self.reset_task()
-        if reset_agent_start_pos:
+        elif reset_agent_start_pos:
             self.reset_agent_start_position()
         return self.get_obs()
 
     def reset_task(self):
         # reset the entire board and agent start position, generating a new MDP.
+        self.agent.agent_position = (-1, -1)
         self.game_grid.get_new_game_grid()
         self.reset_agent_start_position()
 
     def reset_agent_start_position(self):
         # keep the previous board but update the agents starting position.
         # keeps the previous MDP but samples x_0.
-        new_start = self.game_grid.get_one_non_agent_square()
+        new_start = self.game_grid.get_one_normal_square()
         self.agent.agent_position = new_start
         self.agent.agent_position_init = new_start
 
@@ -297,9 +305,10 @@ class KrazyGridWorld:
         if self.image_obs:
             return self.get_img_obs()
         else:
-            return None
+            return self.get_state_obs()
 
     def step(self, a, render=False):
+        start_reward = self.get_reward()
         if self.agent.dead is False:
             proposed_step = self.agent.try_step(a)
             if self.game_grid.is_position_legal(proposed_step):
@@ -327,7 +336,7 @@ class KrazyGridWorld:
 
             if render:
                 self.render()
-        return self.get_obs(), self.get_reward(), self.agent.dead, dict()
+        return self.get_obs(), self.get_reward() - start_reward, self.agent.dead, dict()
 
     def check_dead(self):
         agent_pos = self.agent.agent_position
@@ -365,37 +374,39 @@ class KrazyGridWorld:
         if self.simple_image_viewer is None:
             from gym.envs.classic_control.rendering import SimpleImageViewer
             self.simple_image_viewer = SimpleImageViewer()
-        im_obs = self.get_img_obs()
+        im_obs = self.get_img_obs(render_global_obs=True)
         self.simple_image_viewer.imshow(im_obs)
         time.sleep(0.075)
 
-    def get_state_obs(self):
+    def get_state_obs(self, flatten=True):
         grid_np = copy.deepcopy(self.game_grid.grid_np)
         agent_p = self.agent.agent_position
         grid_np[agent_p[0], agent_p[1]] = self.tile_types.agent
         grid_np = grid_np.astype(np.uint8)
         #agent_p = np.array(self.agent.agent_position)
         if self.one_hot_obs:
-            n_values = np.max(grid_np) + 1
+            n_values = len(self.tile_types.all_tt)
             grid_np = np.eye(n_values)[grid_np]
             #agent_p_temp = np.zeros((self.game_grid.grid_squares_per_row, self.game_grid.grid_squares_per_row, 1))
             #agent_p_temp[agent_p[0], agent_p[1], :] = 1
 
         if self.use_local_obs:
-            neighbors = []
             x, y = self.agent.agent_position
+            valid_idxs = np.zeros_like(grid_np)
+            valid_idxs[x, y] = 1.0
             for _i, _j in [(-1, -1), (0, -1), (1, -1), (1, 0), (1, 1), (0, 1), (-1, 1), (-1, 0)]:
                 i, j = (_i + x, _j + y)
                 if 0 <= i < self.game_grid.grid_squares_per_row and 0 <= j < self.game_grid.grid_squares_per_row:
-                    neighbors.append([j, i])
-                else:
-                    neighbors.append(None)
+                    valid_idxs[i, j] = 1.0
+            grid_np *= valid_idxs
 
-            grid_np = np.array(neighbors)
+        if flatten:
+          grid_np = grid_np.flatten()
+        return grid_np
 
-        return grid_np.flatten()
-
-    def get_img_obs(self):
+    def get_img_obs(self, render_global_obs=None):
+        if render_global_obs is None:
+            render_global_obs = not self.use_local_obs
         grid_np = copy.deepcopy(self.game_grid.grid_np)
         grid_np[self.agent.agent_position[0], self.agent.agent_position[1]] = self.tile_types.agent
         fake_img = np.zeros((self.game_grid.grid_squares_per_row, self.game_grid.grid_squares_per_row, 3))
@@ -410,6 +421,8 @@ class KrazyGridWorld:
             neighbors = []
             x, y = self.agent.agent_position
             valid_idxs = np.zeros_like(fake_img)
+            if render_global_obs:
+              valid_idxs[:, :] = 0.5
             valid_idxs[x, y] = 1.0
             for _i, _j in [(-1, -1), (0, -1), (1, -1), (1, 0), (1, 1), (0, 1), (-1, 1), (-1, 0)]:
                 i, j = (_i + x, _j + y)
@@ -421,7 +434,7 @@ class KrazyGridWorld:
             fake_img *= valid_idxs
 
         res = cv2.resize(fake_img,
-                         dsize=(256, 256),
+                         dsize=self.screen_dim,
                          interpolation=cv2.INTER_NEAREST)
         res = res.astype(np.uint8)
         return res
@@ -440,13 +453,14 @@ class KrazyGridWorld:
             return rew
 
     def close(self):
-        self.simple_image_viewer.close()
+        if self.simple_image_viewer is not None:
+            self.simple_image_viewer.close()
 
 
 def run_grid():
     kw = KrazyGridWorld(screen_height=256, grid_squares_per_row=10,
-                        one_hot_obs=False, use_local_obs=False, image_obs=True,
-                        seed=42, task_seed=68, init_pos_seed=70,
+                        one_hot_obs=False, use_local_obs=True, image_obs=True,
+                        seed=42, task_seed=68,
                         num_goals=3, max_goal_distance=np.inf, min_goal_distance=2,
                         death_square_percentage=0.08,
                         num_steps_before_energy_needed=50, energy_sq_perc=0.05, energy_replenish=8,
